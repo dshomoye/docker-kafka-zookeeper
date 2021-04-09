@@ -1,34 +1,47 @@
 import os
-import sys
 import time
 from typing import List
 from multiprocessing import Process
 
-from kafka import KafkaConsumer, KafkaProducer  
+from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import NoBrokersAvailable
 
 bootstrap_servers = "localhost:9092"
-topics_key = "CREATE_TOPICS"
-consumers_key = "CREATE_CONSUMERS"
-producers_key = "CREATE_PRODUCERS"
+consumers_key = "MOCK_CONSUMERS"
+producers_key = "MOCK_PRODUCERS"
 unavailable_retries = 5
 
 def start_consumer(topic: str, group: str) -> None:
-    print(f"consumer {group} consuming {topic}")
-    consumer = KafkaConsumer(topic, group_id=group, bootstrap_servers=[bootstrap_servers])
-    for _ in consumer:
-        time.sleep(1)
+    retries = unavailable_retries
+    while retries:
+        try:
+            consumer = KafkaConsumer(topic, group_id=group, bootstrap_servers=[bootstrap_servers])
+            print(f"consumer {group} consuming {topic}")
+            for _ in consumer:
+                time.sleep(1)
+        except NoBrokersAvailable:
+            time.sleep(5)
+            retries -= 1
+    print(f"unable to create consumer {group}, broker unreachable")
+
 
 def start_producer(topics: List[str]) -> None:
-    producer = KafkaProducer(bootstrap_servers=[bootstrap_servers])
-    print(f"producing to topic: {topics}")
-    while True:
-        time.sleep(1)
-        for t in topics:
-            producer.send(t, b"hello world")
+    retries = unavailable_retries
+    while retries:
+        try:
+            producer = KafkaProducer(bootstrap_servers=[bootstrap_servers])
+            print(f"producing to topic: {topics}")
+            while True:
+                time.sleep(1)
+                for t in topics:
+                    producer.send(t, b"hello world")
+        except NoBrokersAvailable:
+            time.sleep(5)
+            retries -= 1
+    print(f"unable to create producer for {topics}, broker unreachable")
 
 
-def start():
+def start():    
     processes: List[Process] = []
     producers_string = os.getenv(producers_key)
     producers = producers_string.split(";") if producers_string else []
@@ -46,24 +59,15 @@ def start():
         for c_t in c_topics:
             p = Process(target=start_consumer, args=(c_t, consumer))
             p.start()
-            processes.append(t)
+            processes.append(p)
     return processes
 
 
 def main():
-    global unavailable_retries
     try:
         runners = start()
         for p in runners:
             p.join()
-    except NoBrokersAvailable:
-        if unavailable_retries:
-            print("no brokers available trying again in 5s...")
-            time.sleep(5)
-            unavailable_retries -= 1
-            main()
-        print("Unable to connect to any brokers. Exiting...")
-        sys.exit(1)
     except Exception as e:
         if runners:
             for p in runners:
