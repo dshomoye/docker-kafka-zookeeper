@@ -1,5 +1,5 @@
 # Kafka and Zookeeper
-FROM alpine:3.9.2
+FROM python:3-alpine
 
 RUN apk add --update openjdk8-jre supervisor bash gcompat
 
@@ -21,9 +21,10 @@ RUN tar xfz /tmp/kafka_"$SCALA_VERSION"-"$KAFKA_VERSION".tgz -C /opt && rm /tmp/
 
 ADD assets/scripts/start-kafka.sh /usr/bin/start-kafka.sh
 ADD assets/scripts/start-zookeeper.sh /usr/bin/start-zookeeper.sh
+ADD assets/scripts/mocks.py /usr/bin/mocks.py
 
 # Supervisor config
-ADD assets/supervisor/kafka.ini assets/supervisor/zookeeper.ini /etc/supervisor.d/
+ADD assets/supervisor/kafka.ini assets/supervisor/zookeeper.ini assets/supervisor/mocks.ini /etc/supervisor.d/
 
 # 2181 is zookeeper, 9092 is kafka
 EXPOSE 2181 9092
